@@ -1,0 +1,323 @@
+---
+title: "HW (Week 17) - BACS"
+author: 'Author: 110077432'
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+- \lhead{6/12/2022}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+require(dplyr)
+require(rpart)
+require(rpart.plot)
+require(cowplot)
+```
+
+Let's load the dataset for this assignment:
+```{r}
+insurance <- read.csv("insurance.csv")
+insurance <- na.omit(insurance)
+```
+
+# Question 1
+
+## a) Reporting an OLS regression with charges as outcome variable
+```{r, warning = FALSE}
+ols <- lm(charges ~ age + factor(sex) + bmi + children + factor(smoker) + factor(region),
+          data = insurance)
+
+summary(ols)
+```
+
+As we can see from the summary of the regression, the variables _age_, _bmi_, _children_, and _smoker_ are statistically significant. Two of the levels for _region_ are just statistically significant within 90% confidence.
+
+## b) Creating a regression tree with default parameters
+```{r}
+tree <- rpart(ols$model, data = insurance)
+```
+
+### i) Plotting a visual representation of the tree
+```{r}
+rpart.plot(tree)
+```
+
+### ii) Depth of the tree
+
+As visible from the plot above, the decision tree is __2__ levels deep.
+
+### iii) Number of leaf groups
+
+The decision tree is suggesting us to consider __4__ leaf groups.
+
+### iv) Average charges of each leaf group
+`
+The average number of charges for each group can be summarized as:
+
+* Smokers and younger than 43: 5399;
+* Smokers and older than 43: 12300;
+* Non-smokers and with bmi lower than 30: 21000;
+* Non-smokers and bmi higher than 30: 42000;
+
+### v) Conditions deciding each group
+
+A first condition is made depending on whether the individual is a smoker or not. If he is a smoker, the next decision depends on whether his/her age is smaller or greater than 43, while if he is not a smoker the next decision is made upon whether his/her BMI is lower or greater than 30.
+
+# Question 2
+
+## a) Out-of-sample RMSE of the OLS regression model
+
+In order to apply LOOCV, let's re-define the functions to calculate the MSE, but adjusted for providing an RMSE:
+```{r}
+fold_i_pe <- function(i, k, model, dataset, outcome) {
+  folds <- cut(1:nrow(dataset), breaks=k, labels=FALSE)
+  test_indices <- which(folds==i)
+  test_set <- dataset[test_indices, ]
+  train_set <- dataset[-test_indices, ]
+  trained_model <- update(model, data = train_set)
+  predictions <- predict(trained_model, test_set)
+  dataset[test_indices, outcome] - predictions 
+}
+
+k_fold_mse <- function(model, dataset, outcome, k=10) {
+  shuffled_indicies <- sample(1:nrow(dataset))
+  dataset <- dataset[shuffled_indicies,]
+  fold_pred_errors <- sapply(1:k, function(kth) {
+   fold_i_pe(kth, k, model, dataset, outcome)
+})
+  pred_errors <- unlist(fold_pred_errors)
+  rmse <- function(errs) sqrt(mean(errs^2))
+  RMSE_oos = rmse(pred_errors)
+  RMSE_oos
+}
+```
+
+Now, it will be possible to calculate the out-of-sample RMSE of the OLS regression model:
+```{r}
+k_fold_mse(model = ols, dataset = insurance, outcome = "charges", k = nrow(insurance))
+```
+## b) Out-of-sample RMSE of the decision tree regression model
+
+As for the decision tree model, its out-of-sample RMSE is the following:
+```{r}
+k_fold_mse(model = tree, dataset = insurance, outcome = "charges", k = nrow(insurance))
+```
+
+We can see that the RMSE of the decision tree model is quite _lower_ than the one from the ols model, which indicates that the decision tree model seems to be able to provide better predictions.
+
+# Question 3
+
+Let's apply split-sample testing with a 80:20 partition between train and test sets. At first, we apply this approach on the OLS regression model:
+```{r}
+set.seed(20220612)
+train_indices <- sample(1:nrow(insurance), size = 0.80*nrow(insurance))
+train_set <- insurance[train_indices,]
+test_set <- insurance[-train_indices,]
+```
+
+## a) Writing bagged_learn() and bagged_predict()
+
+Let's start out with defining bagged_learn():
+```{r}
+bagged_learn <- function(model, dataset, b = 100) {
+  lapply(1:b, \(i) {
+    # 1. Get a bootstrapped (resampled w/ replacement) dataset
+    new_data <- dataset[sample(1:nrow(dataset), replace = T), ]
+    # 2. Return a retrained (updated) model
+    bagged_model <- update(model, data = new_data)
+    return(bagged_model)
+  })
+}
+```
+
+And now we can define bagged_predict():
+```{r}
+bagged_predict <- function(bagged_model, new_data, b = 100) {
+  # get b predictions of new_data
+  predictions <- lapply(1:b, \(i) {
+    predict(bagged_model[[i]], new_data)
+  })
+  # apply a mean over the columns of predictions
+  as.data.frame(predictions) |> apply(1, mean) 
+}
+```
+
+## b) Out-of-sample RMSE for the OLS regression
+
+In order to find out the RMSE, let's create a function:
+```{r}
+rmse_oos <- function(actuals, preds) {
+  sqrt(mean((preds - actuals)^2))
+}
+```
+
+We can finally compute the out-of-sample RMSE for the bagged OLS regression:
+```{r}
+set.seed(20220612)
+bagged_learn(model = ols, dataset = train_set) |>
+  bagged_predict(new_data = test_set) |> 
+  rmse_oos(actuals = test_set$charges)
+```
+
+## c) Out-of-sample RMSE for the bagged decision tree
+```{r}
+set.seed(20220612)
+bagged_learn(model = tree, dataset = train_set) |>
+  bagged_predict(new_data = test_set) |> 
+  rmse_oos(actuals = test_set$charges)
+```
+
+# Question 4
+
+## a) Writing boosted_learn() and boosted_predict()
+
+Let's start out with defining boosted_learn():
+```{r}
+boost_learn <- function(model, dataset, outcome, n = 100, rate = 0.1) {
+  # get data frame of only predictor variables
+  predictors <- subset(dataset, select = !(names(dataset) %in% outcome)) 
+  
+  # Initialize residuals and models
+  res <- subset(dataset, select = outcome) # get vector of actuals to start
+  models <- list()
+
+  for (i in 1:n) {
+    this_model <- update(model, data = cbind(charges = res, predictors))
+    # update residuals with learning rate
+    res <- res - rate * predict(this_model, dataset)
+    # Store model
+    models[[i]] <- this_model 
+  }
+  list(models=models, rate=rate)
+}
+```
+
+And now we can define boosted_predict():
+```{r}
+boost_predict <- function(boosted_learning, new_data) {
+  boosted_models <- boosted_learning[[1]]
+  rate <- boosted_learning[[2]]
+  n <- length(boosted_learning$model)
+  
+  # get predictions of new_data from each model
+  predictions <- lapply(1:n, \(i) {
+    rate * predict(boosted_models[[i]], new_data)
+  })
+
+  pred_frame <- as.data.frame(predictions) |> unname()
+
+  apply(pred_frame, 1, sum) # apply a mean over the columns of predictions
+}
+```
+
+## b) Out-of-sample RMSE for the boosted OLS regression
+```{r}
+set.seed(20220612)
+boost_learn(ols, train_set, "charges") |> 
+  boost_predict(test_set) |> rmse_oos(actuals = test_set$charges)
+```
+
+## c) Out-of-sample RMSE for the boosted decision tree
+```{r}
+set.seed(20220612)
+boost_learn(tree, train_set, "charges") |> 
+  boost_predict(test_set) |> rmse_oos(actuals = test_set$charges)
+```
+
+# Question 5
+
+## a) Repeating the bagging of the decision tree model
+```{r}
+set.seed(20220612)
+
+rmses <- data.frame()
+
+for(i in 1:10) {
+  depth <- i
+  # running the decision tree model 
+  tree_mod <- rpart(ols$model, data = insurance, control = list(maxdepth = depth))
+  
+  # computing the RMSE
+  rmse_new <- bagged_learn(model = tree_mod, dataset = train_set) |>
+    bagged_predict(new_data = test_set) |> 
+    rmse_oos(actuals = test_set$charges)
+  
+  # storing the RMSE  
+  rmses[i, 1] <- rmse_new
+  
+  # start the check after the first loop is finished
+  if (i > 1) {
+  # if statement to check whether the latest RMSE is greater than the previous one   
+    if(rmse_new > rmse_old) {
+      names(rmses) <- "RMSE"
+      # printing all the stored RMSEs
+      print(rmses)
+      plot(x = rmses$RMSE, col = "cornflowerblue", type = "b", lwd = 2)
+      abline(h = rmse_old, col = "red", lty = 2, lwd = 2)
+      n <- i # depth level at which the RMSE starts growing
+      break
+   } 
+    else {
+      rmse_old <- rmse_new
+    }
+  }
+  else {
+    rmse_old <- rmse_new
+  }
+}
+```
+
+As we can see from the dataframe and plot above, the RMSE starts increasing when the fourth level of depth is reached.
+
+## b) Repeating the boosting of the decision tree model
+```{r}
+set.seed(20220612)
+
+rmses_b <- data.frame()
+
+for(i in 1:10) {
+  depth <- i
+  # running the decision tree model 
+  tree_mod <- rpart(ols$model, data = insurance, control = list(maxdepth = depth))
+  
+  # computing the RMSE
+  rmse_new <- boost_learn(model = tree_mod, dataset = train_set, outcome = "charges") |>
+    boost_predict(new_data = test_set) |> 
+    rmse_oos(actuals = test_set$charges)
+  
+  # storing the RMSE  
+  rmses_b[i, 1] <- rmse_new
+  
+  # start the check after the first loop is finished
+  if (i > 1) {
+  # if statement to check whether the latest RMSE is greater than the previous one   
+    if(rmse_new > rmse_old) {
+      names(rmses_b) <- "RMSE"
+      # printing all the stored RMSEs
+      print(rmses_b)
+      plot(x = rmses_b$RMSE, col = "cornflowerblue", type = "b", lwd = 2)
+      abline(h = rmse_old, col = "red", lty = 2, lwd = 2)
+      n <- i # depth level at which the RMSE starts growing
+      break
+   } 
+    else {
+      rmse_old <- rmse_new
+    }
+  }
+  else {
+    rmse_old <- rmse_new
+  }
+}
+
+n
+```
+
+As we can see above, the RMSE will start increasing at the 4th depth level.

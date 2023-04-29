@@ -1,0 +1,258 @@
+---
+title: "HW (Week 9) - BACS"
+author: 'Author: 110077432'
+date: "4/17/2022"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+- \lhead{4/17/2022}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(lsa)
+library(dplyr)
+```
+
+```{r}
+# Loading the piccollage dataset
+pic_data <- read.csv("piccollage_accounts_bundles.csv")
+```
+
+# Question 1
+
+## a) Exploring if any sticker bundle seems intuitively similar
+
+### i) How many recommendations does each bundle have on the App?
+
+Each stickers bundle has 6 recommendations.
+
+### ii) Find a sticker bundle that is both on the app and in the dataset: recommend 5 other bundles from the dataset which may have similar usage patterns.
+
+I choose the bundle "Odd Anatomy". Just by looking at the names of other bundles present in our dataset I would recommend "sphallowen", "frombierun", "Halloween2012StickerPack", "creepycute" and "NaiveLittleThings".
+
+## b) Searching for similar bundles using geometric models of similarity
+
+### i) Creating cosine similarity based recommendations for all bundles
+
+At first, let's convert our dataset into a matrix:
+```{r}
+pic_data_m <- data.matrix(pic_data[-1])
+```
+
+Second, we can create a function that provides the top 5 recommendations for each stickers bundle using cosine similarity method:
+```{r}
+recommend <- function(data) {
+  cos <- cosine(data)
+  rec <- t(apply(cos, 1, function(x) names(sort(x, decreasing=TRUE))))
+  top_5 <- rec[, 2:6]
+  colnames(top_5) <- c("1st", "2nd", "3rd", "4rd", "5th")
+  return(top_5)
+  }
+
+# Running the function on our dataset matrix
+recommendations_cosine <- recommend(pic_data_m)
+```
+
+Now, let's check the top 5 recommendations for the OddAnatomy bundle according to cosine similarity:
+```{r}
+recommendations_cosine["OddAnatomy", ]
+```
+As we can see, the recommendations that I had given in the beginning of the assignment basing on my intuitions were totally wrong :D None of the stickers I had chosen is actually within the top 5 recommended for OddAnatomy. Instead, we see that the top 5 recommended bundles are (from 1st to 5th): alien, xoxo, between, KLL, BlingStickerPack.
+
+### ii) Creating correlation based recommendations
+
+Firstly, we shall mean-center (column wise) the values of the dataset matrix:
+```{r}
+data_means <- apply(pic_data_m, 2, mean)
+data_means_m <- t(replicate(nrow(pic_data_m), data_means))
+data_means_m_mc <- pic_data_m - data_means_m
+```
+
+Then, we run the previously built function to obtain new correlation based recommendations:
+```{r}
+recommendations_cor <- recommend(data_means_m_mc)
+```
+
+And when we check the top 5 recommendations for OddAnatomy according to this method:
+```{r}
+# Checking how the recommendations vary for the selected bundle (OddAnatomy):
+recommendations_cor["OddAnatomy", ]
+```
+
+We can see that the top 5 recommendations for the OddAnatomy bundle are the same as those provided by the cosine similiarity method.
+
+### iii) Creating adjusted-cosine based recommendations
+
+Firstly, we shall mean-center the accounts (so now we proceed row wise) of our dataset matrix:
+```{r}
+data_means_row <- apply(pic_data_m, 1, mean)
+data_means_m_row <- replicate(ncol(pic_data_m), data_means_row)
+data_means_m_mc_row <- pic_data_m - data_means_m_row
+```
+
+Then, we run the previously built function to obtain new adjusted-cosine based top 5 recommendations:
+```{r}
+recommendations_adjust <- recommend(data_means_m_mc_row)
+```
+
+Finally, let's see what the top 5 recommendations for OddAnatomy are according to this method:
+```{r}
+recommendations_adjust["OddAnatomy", ]
+```
+
+We can see that the top 5 recommendations for OddAnatomy change when we use the adjusted-cosine similarity method. Now the top 5 recommended bundles are the following (from 1st to 5th): xoxo, alien, between, KLL, word.
+
+## c) Are the three sets of recommendations different from your initial intuition? Why so?
+Yes, in all the three methods the recommendations provided in relation to OddAnatomy bundle are totally different from what I had initially inferred. I was basing my intuitions exclusively on bundles names, but perhaps the bundles that I have thought of are not the best recommendations in relation to AddAnatomy, despite their names seem to be linked in some way. Moreover, I did not have any look at the data. The three geometric-based recommendation methods provide different results because users who use OddAnatomy bundles are often found using other bundles as well, which are not those that I expected. This leads to higher recommendation scores for those packages.
+
+## d) What is the conceptual difference in cosine similarity, correlation and adjusted cosine?
+
+Cosine similarity is a measure of similarity between two non-zero vectors of an inner product space that measures the cosine of the angle between them. Correlation is a measure based on how much the given values deviate from their mean. The adjusted cosine approach subtracts the mean before computing the cosine formula.
+
+# Question 2
+
+## a) Creating a horizontal set of random points, with a narrow but flat distribution
+
+### i) What raw slope of x and y would you expect?
+
+I'd expect the raw slope to be about 0.
+
+### ii) What is the correlation between x and y that you would expect?
+
+I'd expect the correlation between x and y to be about 0.
+
+```{r a, echo=FALSE, fig.cap="Scenario a)", out.width = '60%', fig.align='center', }
+knitr::include_graphics("plt_1.png")
+```
+
+## b) Creating a completely random set of points
+
+### i) What raw slope of x and y would you expect?
+
+I'd expect the raw slope to be again approximately 0.
+
+### ii) What is the correlation between x and y that you would expect?
+
+Similarly, I'd expect the correlation parameter to be close to 0.
+
+```{r b, echo=FALSE, fig.cap="Scenario b)", out.width = '60%', fig.align='center', }
+knitr::include_graphics("plt_2.png")
+```
+
+## c) Creating a diagonal set of random points trending upwards at 45°
+
+### i) What raw slope of x and y would you expect?
+
+I'd expect the raw slope to be about 1, as the regression line should be trending upwards with an angle of 45°.
+
+### ii) What is the correlation between x and y that you would expect?
+
+I'd expect the correlation parameter to be quite high and close to 1. An increase in x-values brings a similar increase in y-values.
+
+```{r c, echo=FALSE, fig.cap="Scenario c)", out.width = '60%', fig.align='center', }
+knitr::include_graphics("plt_3.png")
+```
+
+## d) Creating a diagonal set of random points trending downward at 45°
+
+### i) What raw slope of x and y would you expect?
+
+I'd expect the raw slope to be approximately -1, as the regression line would be trending downwards with an angle of 45°.
+
+### ii) What is the correlation between x and y that you would expect?
+
+I'd expect the correlation parameter to be strongly negative and close to 1. An increase in the x-values brings a similar decrease in y-values.
+
+```{r d, echo=FALSE, fig.cap="Scenario d)", out.width = '60%', fig.align='center', }
+knitr::include_graphics("plt_4.png")
+```
+
+\newpage
+
+## e) Creating a pattern that suggests a strong relation but has no correlation
+
+I was able to create the following pattern, which resembles a parabolic function in some sense and leads to a 0 correlation:
+
+```{r e, echo=FALSE, fig.cap="Scenario e)", out.width = '60%', fig.align='center', }
+knitr::include_graphics("plt_e.png")
+```
+
+## f) Creating a pattern that suggests no relation but has a perfect correlation
+
+I was able to create the following pattern, which leads to a correlation close to 1.
+
+```{r f, echo=FALSE, fig.cap="Scenario f)", out.width = '60%', fig.align='center', }
+knitr::include_graphics("plt_f.png")
+```
+
+\newpage
+
+## g) The relation between correlation and simple regression
+
+### i) Running the simulation and recording the points
+
+I ran a simulation that records a positive relation. Here are the coordinates and the plot:
+```{r, include=FALSE}
+# pts <- write.csv(interactive_regression(), file="pts.csv", row.names = FALSE)
+pts <- read.csv("pts.csv", header = TRUE)
+```
+```{r}
+pts
+```
+
+```{r g, echo=FALSE, fig.cap="Simulation displaying a positive relation", out.width = '60%', fig.align='center', }
+knitr::include_graphics("pts.png")
+```
+
+\newpage
+
+### ii) Estimating the regression intercept and slope
+```{r}
+summary(lm(pts$y ~ pts$x))
+```
+As we can see from the summary above, the intercept and slope coefficients are the same as those shown on the plot.
+
+### iii) Estimating the correlation of x and y
+```{r}
+cor(pts$x, pts$y)
+```
+As we can see, the correlation coefficient is the same as the one shown on the plot of our simulation.
+
+### iv) Standardizing x and y and re-estimating the regression slope
+
+First, we can create a function for the purpose of standardizing:
+```{r}
+standardize <- function(data) {
+  data.frame((data - mean(data))/sd(data))
+}
+```
+
+Then, we run the function and standardize the x and y values:
+```{r}
+x_pts_std <- standardize(pts$x)
+y_pts_std <- standardize(pts$y)
+
+std <- cbind(x_pts_std, y_pts_std)
+colnames(std) <- c("x_std", "y_std")
+```
+
+And finally we re-estimate the regression:
+```{r}
+summary(lm(std$y_std ~ std$x_std))
+```
+
+### v) What is the relationship between correlation and the standardized simple-regression estimates?
+
+As we can confirm from the regression summary above, the correlation coefficient of the original x and y values is equal to the slope coefficient of the standardized x and y values.
+This comes as a consequence of standardization; indeed, after we standardize, the standard deviations of the x and y values become both equal to 1. And according to the formula for calculating the slope coefficient estimated by least squares:
+
+$$
+\hat{\beta}=cor(Y_i, X_i)\cdot\frac{sd(Y_i)}{sd(X_i)}
+$$
+This would mean that we are multiplying the correlation coefficient by 1, which returns a slope coefficient equal to the correlation.

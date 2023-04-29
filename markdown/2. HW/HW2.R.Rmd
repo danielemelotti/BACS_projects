@@ -1,0 +1,195 @@
+---
+title: "HW (Week 2) - BACS"
+author: 'Author: 110077432'
+date: "2/27/2022"
+output: pdf_document
+---
+
+# Question 1
+## a) Distribution 2
+```{r d456, fig.height = 3, fig.width = 5, fig.align = "center"}
+# Three normally distributed data sets:
+d4 <- rnorm(n = 500, mean = 55, sd = 5)
+d5 <- rnorm(n = 200, mean = 45, sd = 10)
+d6 <- rnorm(n = 100, mean = 30, sd = 15)
+
+# Merging the three data sets together:
+d456 <- c(d4, d5, d6)
+
+# Computing the mean and median:
+mean(d456)
+median(d456)
+
+# Plotting the density function of d123:
+plot(density(d456), col= "green", lwd = 2, 
+     main = "Distribution 2", )
+abline(v = mean(d456))
+abline(v = median(d456), lty = "dashed")
+```
+
+## b) Distribution 3
+```{r d, fig.height = 3, fig.width = 5, fig.align = "center"}
+# Creating a normally distributed dataset d:
+d <- rnorm(n = 800)
+
+# Plotting the density function of d:
+plot(density(d), col = "yellow", lwd = 2, 
+     main = "Distribution 3", )
+abline(v = mean(d))
+abline(v = median(d), lty = "dashed")
+
+# Computing the mean and median:
+mean(d)
+median(d)
+```
+
+## c) Which measure of central tendency will be more sensitive to outliers being added to data?
+I think it's the mean which is more sensitive to outliers being added to the data. Introducing a very big (or very small) outlier is going to affect the mean sensibly, while it almost certainly won't change much the median, which is found in the dataset's middle value (or average of the 2 middle values if the number of observations in the dataset is even). In fact, the computation of the mean takes into account all the observations (including outliers as well), while the median only considers a maximum of 2 values contained in the middle of the sorted dataset.
+
+
+# Question 2
+## a) Adding mean and standard deviation lines
+```{r rdata, fig.height = 3, fig.width = 5, fig.align = "center"}
+# Creating the distribution:
+set.seed(100)
+rdata <- rnorm(n = 2000, mean = 0, sd = 1)
+
+# Plotting the density function of rdata:
+plot(density(rdata), col = "red", lwd = 2,
+     main = "rdata distribution")
+
+# With the following vertical lines:
+abline(v = mean(rdata), col = "blue" )
+abline(v = (mean(rdata) - (3 * sd(rdata))), lty = "dashed")
+abline(v = (mean(rdata) - (2 * sd(rdata))), lty = "dashed")
+abline(v = (mean(rdata) - sd(rdata)), lty = "dashed")
+abline(v = (mean(rdata) + sd(rdata)), lty = "dashed")
+abline(v = (mean(rdata) + (2 * sd(rdata))), lty = "dashed")
+abline(v = (mean(rdata) + (3 * sd(rdata))), lty = "dashed")
+```
+
+## b) 1st, 2nd and 3rd quartiles
+```{r}
+# Finding the 1st, 2nd and 3rd quartiles:
+quantile(rdata, 0.25)
+quantile(rdata, 0.50) #median
+quantile(rdata, 0.75)
+
+# Computing how many standard deviations from the mean are there between the quartiles and the mean:
+(quantile(rdata, 0.25) - mean(rdata))/sd(rdata)
+(quantile(rdata, 0.50) - mean(rdata))/sd(rdata)
+(quantile(rdata, 0.75) - mean(rdata))/sd(rdata)
+```
+The distances of the quartiles in terms of standard deviations from the mean are very close to the values of the quartiles themselves (indeed we are subtracting a mean of circa 0 and dividing by a standard deviation of circa 1). The distance of the 1st quartile from the mean is 0.6791, the distance of the 2nd quartile is 0.0082 and the distance of the 3rd quartile is 0.6570.
+
+## c) 1st and 3rd quartiles from a different distribution
+```{r}
+# Creating a new normally distributed dataset:
+set.seed(200)
+data <- rnorm(n = 2000, mean = 35, sd = 3.5)
+
+# Calculating the 1st and 3rd quartiles:
+quantile(data, 0.25)
+quantile(data, 0.75)
+
+# Computing how many standard deviations from the mean are there between our quartiles and the mean:
+(quantile(data, 0.25) - mean(data))/sd(data)
+(quantile(data, 0.75) - mean(data))/sd(data)
+```
+We see that for this distribution the distances of the 1st and 3rd quartiles from the mean in terms of standard deviations are very similar to those from b). Indeed, the distance for the 1st quartile is now 0.6802, and the distance of the 3rd quartile is 0.6609.
+
+## d) 1st and 3rd quartiles from the dataset contained in description
+```{r}
+# d123 from the description to Question 1:
+set.seed(300)
+d1 <- rnorm(n=500, mean=15, sd=5)
+d2 <- rnorm(n=200, mean=30, sd=5)
+d3 <- rnorm(n=100, mean=45, sd=5)
+
+d123 <- c(d1, d2, d3)
+
+# Calculating the 1st and 3rd quartiles:
+quantile(d123, 0.25)
+quantile(d123, 0.75)
+
+# Computing how many standard deviations from the mean are there between our quartiles and the mean:
+(quantile(d123, 0.25) - mean(d123))/sd(d123)
+(quantile(d123, 0.75) - mean(d123))/sd(d123)
+```
+The distance of the 1st quartile has increased very lightly (0.7378), while the distance of the 3rd quartile has decreased lightly (0.6208), when compared to b). Overall, it seems that normal distributions with different parameters will have quite similar distance of the 1st and 3rd quartile from the mean (in terms of standard deviation).
+
+# Question 3
+## a) Which formula is recommended for calculating bin widths/number? What is the advantage?
+The user Rob Hyndman suggests to use the Freedman-Diaconis' rule. This formula uses the IQR instead of standard deviation, which according to Wikipedia is less sensitive to outliers in the data.
+
+## b) Use Sturge, Scott, and Freedman-Diaconis' methods for computing bin widths and number of bins
+```{r}
+# Given random normal distribution:
+set.seed(100)
+n <- 800
+rand_data <- rnorm(n, mean=20, sd = 5)
+
+# Sturge's formula:
+ks_1 <- ceiling(log2(n) + 1) # k
+ks_1
+
+hs_1 <- (max(rand_data) - min(rand_data))/ks_1 # h
+hs_1
+```
+
+```{r}
+# Scott's normal reference rule:
+hsc_1 <- (3.49 * sd(rand_data))/(n ^ (1/3)) # h
+hsc_1
+
+ksc_1 <- ceiling((max(rand_data) - min(rand_data))/hsc_1) # k
+ksc_1
+```
+
+```{r}
+# Freedman-Diaconis' choice:
+IQR <- quantile(rand_data, 0.75) - quantile(rand_data, 0.25)
+
+hf_1 <- unname(2 * (IQR / (n ^ (1/3)))) # h
+hf_1
+
+kf_1 <- unname(ceiling((max(rand_data) - min(rand_data))/hf_1)) # k
+kf_1
+```
+
+## c) Repeat the previous step with the addition of outliers in the dataset
+```{r}
+# Adding the outlier data:
+set.seed(100)
+out_data <- c(rand_data, runif(10, min=40, max=60))
+n2 <- n + 10
+
+# Sturge's formula:
+ks_2 <- ceiling(log2(n2) + 1) # k
+ks_2
+
+hs_2 <- (max(out_data) - min(out_data))/ks_2 #h
+hs_2
+```
+
+```{r}
+# Scott's normal reference rule:
+hsc_2 <- (3.49 * sd(out_data))/(n2 ^ (1/3)) # h
+hsc_2
+
+ksc_2 <- unname(ceiling((max(out_data) - min(out_data))/hsc_2)) # k
+ksc_2
+```
+
+```{r}
+# Freedman-Diaconis' choice:
+IQR2 <- quantile(out_data, 0.75) - quantile(out_data, 0.25)
+
+hf_2 <- unname(2 * (IQR2 / (n2 ^ (1/3)))) # h
+hf_2
+
+kf_2 <- unname(ceiling((max(out_data) - min(out_data))/hf_2)) # k
+kf_2
+```
+
+It is easily visible that the method which shows the least change in terms of h is Freedman-Diaconis. Indeed, this method uses the IQR as opposed to Scott's normal reference rule, which use standard deviation in the formula. If we look at the formula for the quartiles (necessary to calculate IQR), we see that the only parameter affecting their value is the number of observations. Standard deviation instead also takes into account the value of the observations. Therefore, a small number of extreme observations will cause greater change in the standard deviation than in the quartiles (and consequently in IQR). Freedman-Diaconis' is more reliable than Sturge's formula too, as after calculating k using Sturge's formula, we'll have to find h by considering the maximum and minimum datapoints in the given dataset, which likely means including outliers.

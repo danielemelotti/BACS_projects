@@ -1,0 +1,241 @@
+---
+title: "HW (Week 7) - BACS"
+author: 'Author: 110077432'
+date: "3/31/2022"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+- \lhead{3/31/2022}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyr)
+require(ggplot2)
+require(dplyr)
+require(ggthemes)
+require(reshape2)
+require(FSA)
+```
+
+```{r}
+# Importing the data
+pls_1 <- read.csv("pls-media1.csv")
+pls_2 <- read.csv("pls-media2.csv")
+pls_3 <- read.csv("pls-media3.csv")
+pls_4 <- read.csv("pls-media4.csv")
+```
+
+# Question 1
+
+## a) Calculating the means of INTEND.0 for each media type
+First, let's bind the 4 datasets into a unique one:
+```{r}
+pls <- rbind(pls_1, pls_2, pls_3, pls_4)
+```
+
+Then, we can compute the means per each media type with the aid of dplyr package:
+```{r, warning = FALSE}
+means <- pls %>%
+  group_by(media) %>%
+  summarise(mean = mean(INTEND.0))
+
+means # a new dataset containing the means
+```
+## b) Visualizing the distributions and means of INTEND.0
+We can plot the distributions with the means of each of the media types:
+```{r}
+pls %>%
+  ggplot(aes(group = media, x = INTEND.0)) +
+  geom_density(aes(fill = factor(media)), alpha = 0.6) +
+  geom_vline(data = means, aes(xintercept = mean, color = factor(media)), size = 1) +
+  scale_fill_discrete(name = "Media type") +
+  guides(alpha = "none", col = "none") +
+  ggtitle("Distributions and Means of INTEND.0 grouped by Media type") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+We could also prepare boxplots:
+```{r}
+pls %>%
+  ggplot(aes(factor(media), y = INTEND.0, color = factor(media))) +
+  geom_boxplot() +
+  geom_jitter() +
+  xlab("Media type") +
+  guides(col = "none") +
+  coord_flip() +
+  theme_classic()
+```
+
+
+
+## c) Do you feel that media type makes a difference in intention to share?
+I think that there is one type of media that sensibly hurts the intention to share, which is the second type (pictures + audio). The other 3 types don't show significant differences, they rather provide similar propensity to share on average. Especially, when we consider the boxplots, we see that media types present very similar propensity to share. Also, the median for types 1, 3 and 4 is the same (equal to 5), while the median of the second type is 4.
+
+# Question 2
+
+## a) Stating the null and alternative hypotheses when comparing INTEND.0 across four groups in ANOVA
+The null hypothesis states that the means of INTEND.0 of the 4 groups are the same, while the alternative hypothesis claims that there is at least a difference:
+$$
+H_0: \mu_1 = \mu_2 = \mu_3 = \mu_4
+$$
+$$
+H_a: \mu_1 \neq \mu_2; \mu_1 \neq \mu_3; \mu_1 \neq \mu_4; \mu_2 \neq \mu_3; \mu_2 \neq \mu_4; \mu_3 \neq \mu_4
+$$
+
+## b) Computing the F-statistics
+
+### i) Computing MSTR, MSE and F
+Let's start with the MSTR:
+```{r}
+g_mean <- mean(means$mean) # computing the grand mean
+types <- list(pls_1$INTEND.0, pls_2$INTEND.0, pls_3$INTEND.0, pls_4$INTEND.0)
+
+k <- nrow(means) # number of treatments
+N <- nrow(pls) # total number of observations
+
+df_MSTR <- k - 1 # degrees of freedom for MSTR
+
+SSTR <- sum(sapply(types, length) * (sapply(types, mean) - mean(sapply(types, mean))) ^ 2)
+MSTR <- SSTR/df_MSTR
+MSTR
+```
+
+Now let's compute the MSE:
+```{r}
+df_MSE <- (N - k) # degrees of freedom for MSE
+
+SSE <- sum((sapply(types, length) - 1) * sapply(types, var))
+df_MSE <- N - k
+MSE <- SSE/df_MSE
+MSE
+```
+
+Finally, we can calculate our F-statistic:
+```{r}
+F_stat <- MSTR / MSE
+F_stat
+```
+
+### ii) Computing the p-value of F from the null distribution
+```{r}
+p_val <- pf(F_stat, df_MSTR, df_MSE, lower.tail = FALSE)
+p_val
+```
+
+Within 95% confidence, our F-statistic is barely not statistically significant. This means that we cannot reject the null hypothesis, hence the means of INTEND.0 within the 4 media types cannot be considered as different from each other.
+
+## c) Conducting a one-way ANOVA with aov()
+```{r}
+summary(aov_model <- aov(pls$INTEND.0 ~ factor(pls$media)))
+```
+As we can see, the value of the F-statistic is quite close to the one that we obtained with traditional calculations. Indeed the F-statistic is also not statistically significant when considering 95% confidence, just like in the case of our previous calculations.
+
+## d) Conducting a post-hoc Tukey test
+```{r}
+TukeyHSD(aov_model, conf.level = 0.95)
+```
+
+According to the output of the Tukey test, none of the pairs that we are comparing is statistically significant. There is no significant difference between the means of each pair within 95% confidence.
+
+## e) Verifying whether the requirements for one-way ANOVA were met
+There are 3 assumptions that should be met, namely:
+
+* Each treatment/population's response variable is normally distributed;
+* The variance of the response variables is the same for all treatments/populations;
+* The observations are independent: the response variables are not related between groups.
+
+
+We will verify each of these assumptions, starting with the first one. We could draw some qq-plots to verify the normality of the response variable:
+```{r qq, fig.height = 6, fig.width = 6, fig.align = "center"}
+# Creating a function to draw qqplots:
+norm_qq_plot <- function(values) { 
+  probs1000 <- seq(0, 1, 0.001)
+  q_vals <- quantile(x = values ,probs = probs1000)
+  q_norm <- qnorm(p = probs1000, mean = mean(values), sd = sd(values))
+  plot(q_norm, q_vals, xlab="normal quantiles", ylab="values quantiles")
+  abline(a = 0, b = 1 , col="red", lwd=2)
+}
+
+# Creating qqplots:
+par(mfrow = c(2,2))
+norm_qq_plot(pls_1$INTEND.0)
+norm_qq_plot(pls_2$INTEND.0)
+norm_qq_plot(pls_3$INTEND.0)
+norm_qq_plot(pls_4$INTEND.0)
+```
+
+These plots seem a little hard to understand as we are dealing with discrete observations; however, I would assume that normality assumption is not met. We can gain more confidence about it by running a Shapiro-Wilk test of normality:
+```{r}
+sapply(types, shapiro.test)
+```
+
+As we can see, the p-value of each Shapiro-Wilk test is below our 0.05 significance; this means that the normality assumption is not met in any of the considered media types.
+
+Next, let's proceed to verifying whether the variance of the response variables is the same for all treatments. We could do that by looking back at the boxplots that we plotted in Question 1, part b); from there, it seems that the variances are similar. For further verification, we can employ a Bartlett's test for equality of variances:
+```{r}
+bartlett.test(INTEND.0 ~ media, data = pls)
+```
+
+As the p-value is greater than our significance level, we can confirm that the variance of INTEND.0 is roughly similar between the different media types.
+
+Let's verify the last of the three assumptions. As mentioned in the beginning of the instructions to this homework, the data was gathered among "a different panel of randomly assigned people". So, the research was implemented with a randomized design, which should be enough of a confirmation that the observations are independent from each other.
+
+Drawing conclusions, we only fail to satisfy the normality assumption, which is not a big issue in this case, as other assumptions were met and ANOVA is fairly robust to such violation.
+
+# Question 3
+
+## a) Stating the hypothesis for a non-parametric Kruskal-Wallis test
+
+The null hypothesis of this test states that there is no difference between the mean ranks of the different treatments while the alternative hypothesis claims that there is at least a difference:
+$$
+H_0: \mu_{rank1} = \mu_{rank2} = \mu_{rank3} = \mu_{rank4}
+$$
+$$
+H_a: \mu_{rank1} \neq \mu_{rank2}; \mu_{rank1} \neq \mu_{rank3}; \mu_{rank1} \neq \mu_{rank4}; \mu_{rank2} \neq \mu_{rank3}; \mu_{rank2} \neq \mu_{rank4}; \mu_{rank3} \neq \mu_{rank4}
+$$
+
+## b) Computing an approximate Kruskal Wallis H
+
+### i) Showing the code and results of the computation of H
+```{r}
+ranks <- rank(pls$INTEND.0) # ranking all the combined values
+  
+group_ranks <- split(x = ranks, f = pls$media) # grouping the ranks into original groups
+
+ranksums <- sapply(group_ranks, sum) # summing the ranks for each group
+
+# Dividing Kruskal Wallis formula into 3 main parts:
+KW_part_a <- 12 / (N * (N + 1))
+KW_part_b <- sum(sapply(ranksums, function(x) x ^ 2) / sapply(group_ranks, length))
+KW_part_c <- 3 * (N + 1)
+
+H <- KW_part_a * KW_part_b - KW_part_c # finally computing H
+H
+```
+
+### ii) Computing the p-value of H
+```{r}
+kw_p <- 1 - pchisq(H, df = k - 1)
+kw_p
+```
+The p-value is lower than our significance level, therefore the H-value is significant and we can reject the null hypothesis and claim that there is at least a difference between the mean ranks of different media types.
+
+## c) Conducting a Kruskal Wallis test using kruskal.wallis()
+```{r}
+kruskal.test(INTEND.0 ~ media, data = pls)
+```
+
+As we can see, H and the p-value are similar to those of Question 3 part b) ii).
+
+## d) Conduct a post-hoc Dunn test
+```{r, warning=FALSE}
+dunnTest(INTEND.0 ~ media, data = pls, method = "bonferroni")
+```
+
+Considering a 0.05 significance level, we can conclude that the only media types which present significant differences from each other are media type 2 and 4. Indeed, only for that combination we have an adjusted p-value lower than 0.05.
