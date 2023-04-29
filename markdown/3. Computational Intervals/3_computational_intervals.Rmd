@@ -1,0 +1,290 @@
+---
+title: "BACS - HW 3 - Computational Intervals"
+author: 'Author: 110077432'
+date: "3/6/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Set so that long lines in R will be wrapped:
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
+```
+
+# Question 1
+## a) Creating a normal distribution and standardizing it:
+```{r}
+rnorm_no_std <- rnorm(n = 100, mean = 940, sd = 190) # non-standardized
+rnorm_std <- (rnorm_no_std - mean(rnorm_no_std))/sd(rnorm_no_std) # standardized
+```
+
+### i) What values of mean and standard deviation do we expect?
+After standardizing, we expect the mean of the distribution to be equal to 0 and the standard deviation to be equal to 1. We expect this because it is the main purpose for standardizing. Standardization changes the way in which data are spread, turning their mean into 0 and their standard deviation into 1. Advantages of doing so are having more distributions on the same scale, so as to make comparisons easily, or compute probabilities from cumulative probabilities tables. We can make sure that the values are what we expect:
+```{r}
+mean(rnorm_std)
+sd(rnorm_std)
+```
+
+Indeed, the mean and standard deviation are basically 0 and 1. 
+
+### ii) What shape of the standardized distribution do we expect?
+The shape of the distribution of rnorm_std should be bell-shaped, as for a normal distribution. That's because the standardization process does not transform the underlying distribution structure of the data (hence, it does not influence the shape of the distribution); standardization only turns raw data into z-scores (it changes the scale of data), therefore, if the non-standardized distribution is normal (bell-shaped), its standardized version will also be normal. Similarly, a non-normally shaped distribution will remain non-normally shaped after standardization.
+
+Let's have a look at the distribution of rnorm_std and confirm that it is the same as its non-standardized version:
+```{r}
+par(mfrow = c(1,2))
+plot(density(rnorm_std), lwd = 2, main = "rnorm_std", col = "green")
+plot(density(rnorm_no_std), lwd = 2, main = "rnorm_no_std", col = "red")
+```
+
+### iii) How do we call distributions that are normal and standardized?
+We call this kind of distributions "Standard Normal Distribution".
+
+# b) Create a standardized version of minday (minday_std):
+```{r}
+# Creating minday:
+bookings <- read.table("../../data/first_bookings_datetime_sample.txt", header=TRUE)
+bookings$datetime[1:9]
+
+hours  <- as.POSIXlt(bookings$datetime, format="%m/%d/%Y %H:%M")$hour
+mins   <- as.POSIXlt(bookings$datetime, format="%m/%d/%Y %H:%M")$min
+minday <- hours*60 + mins
+```
+
+```{r}
+# Density plot of minday:
+plot(density(minday), lwd = 2, main = "minday", col = "red") # non-normal distribution
+```
+
+```{r}
+# Creating minday_std:
+minday_std <- (minday - mean(minday))/sd(minday)
+```
+
+### i) What do we expect the mean and standard deviation of minday_std to be?
+The mean and standard deviation of minday_std should be 0 and 1 respectively. That's the main purpose of standardization. No matter what the shape of the distribution is, the standardization process will scale the data so as to have mean 0 and standard deviation 1. Indeed:
+```{r}
+mean(minday_std)
+sd(minday_std)
+```
+
+### ii) What shape of minday_std distribution do we expect?
+The distribution of minday_std should look like the distribution of minday (hence, non-normal), for the same reason as in 2b) ii). Indeed:
+```{r}
+# Density plot of minday_std:
+plot(density(minday_std), lwd = 2, main = "minday_std", col = "green")
+```
+
+# Question 2
+```{r, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Running the visualize_sample_ci code:
+visualize_sample_ci <- function(num_samples = 100, sample_size = 100, 
+                                pop_size=10000, distr_func=rnorm, ...) {
+  # Simulate a large population
+  population_data <- distr_func(pop_size, ...)
+  pop_mean <- mean(population_data)
+  pop_sd <- sd(population_data)
+  
+  # Simulate samples
+  samples <- replicate(num_samples, 
+                       sample(population_data, sample_size, replace=FALSE))
+  
+  # Calculate descriptives of samples
+  sample_means = apply(samples, 2, FUN=mean)
+  sample_stdevs = apply(samples, 2, FUN=sd)
+  sample_stderrs <- sample_stdevs/sqrt(sample_size)
+  ci95_low  <- sample_means - sample_stderrs*1.96
+  ci95_high <- sample_means + sample_stderrs*1.96 
+  ci99_low  <- sample_means - sample_stderrs*2.58
+  ci99_high <- sample_means + sample_stderrs*2.58
+  
+  # Visualize confidence intervals of all samples
+  plot(NULL, xlim=c(pop_mean-(pop_sd/2), pop_mean+(pop_sd/2)), 
+       ylim=c(1,num_samples), ylab="Samples", xlab="Confidence Intervals")
+  add_ci_segment(ci95_low, ci95_high, ci99_low, ci99_high,
+                 sample_means, 1:num_samples, good=TRUE)
+  
+  # Visualize samples with CIs that don't include population mean
+  bad = which(((ci95_low > pop_mean) | (ci95_high < pop_mean)) |
+                ((ci99_low > pop_mean) | (ci99_high < pop_mean)))
+  add_ci_segment(ci95_low[bad], ci95_high[bad], ci99_low[bad], ci99_high[bad],
+                 sample_means[bad], bad, good=FALSE)
+  
+  # Draw true population mean
+  abline(v=mean(population_data))
+}
+
+add_ci_segment <- function(ci95_low, ci95_high, ci99_low, ci99_high, 
+                           sample_means, indices, good=TRUE) {
+  segment_colors <- list(c("lightcoral", "coral3", "coral4"),
+                         c("lightskyblue", "skyblue3", "skyblue4"))
+  color <- segment_colors[[as.integer(good)+1]]
+  
+  segments(ci99_low, indices, ci99_high, indices, lwd=3, col=color[1])
+  segments(ci95_low, indices, ci95_high, indices, lwd=3, col=color[2])
+  points(sample_means, indices, pch=18, cex=0.6, col=color[3])
+}
+```
+
+## a) Simulating 100 samples (each of size 100) from a normally distributed population of 10,000:
+```{r}
+visualize_sample_ci(num_samples = 100, sample_size = 100, pop_size=10000, 
+                    distr_func = rnorm, mean=20, sd=3)
+```
+
+### i) How many samples do we expect not to include the population mean in their 95% CI?
+We expect on average 5% of the samples [n = 100 x (1 - 0.95) = 5 samples] to not include the population mean in their 95% CI.
+
+### ii) How many samples do we expect to not include the population mean in their 99% CI?
+We expect on average 1% of the samples [n = 100 x (1 - 0.99) = 1 sample] to not include the population mean in their 99% CI.
+
+## b) Simulating 100 samples (each of size 300) from a normally distributed population of 10,000:
+```{r}
+visualize_sample_ci(num_samples = 100, sample_size = 300, pop_size=10000, 
+                    distr_func = rnorm, mean=20, sd=3)
+```
+
+### i) Do we expect the 95% and 99% CIs to become wider or narrower than in 2a) ?
+We expect the 95% and 99% CIs to become narrower, because increasing the sample size reduces the standard error (sample size n is at the denominator of the formula for calculating standard error; the greater the n, the smaller the error), providing a smaller CI.
+
+### ii) How many samples do we expect to not include the population mean in their 95% CI?
+We still expect on average 5% of the samples to not include the population mean in their 95% CI, hence 5 samples out of 100.
+
+## c) Re-running 2a) and 2b) adopting a uniformly distributed population:
+```{r, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+par(mfrow = c(1,2))
+visualize_sample_ci(num_samples = 100, sample_size = 100, pop_size=10000, 
+                    distr_func = runif)
+
+visualize_sample_ci(num_samples = 100, sample_size = 300, pop_size=10000, 
+                    distr_func = rnorm)
+```
+
+We still expect 5% of the samples to not include the population mean in their 95% CI, and 1% of the sample to not include it in their 99% CI. However, the CIs for the uniform distribution will be larger than those for the normal distribution on average, because the uniform distribution usually presents a higher standard deviation, which increases the standard error (as standard deviation is at the numerator of the formula for standard error). Uniform distributions usually have a larger standard deviation because they bring the most conservative estimate of uncertainty (every outcome has the same likelihood of happening).
+
+# Question 3
+```{r}
+# Getting an insight of minday:
+plot(density(minday), main="Minute (of the day) of first ever booking", col="blue", lwd=2)
+```
+
+## a) What is the average booking time for new members?
+
+### i) Computing mean, standard error and 95% CI of the sampling means of minday
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60)}
+# Mean:
+m <- mean(minday)
+paste("The average booking time is", round(m, 2))
+
+# Standard error:
+se <- sd(minday) / sqrt(length(minday))
+paste("The standard error is", round(se, 2))
+
+# 95% CI:
+left <- m - 1.96 * se
+right <- m + 1.96 * se
+paste("The 95% CI of the sampling means of minday ranges from", round(left, 2), "to", round(right, 2))
+```
+### ii) Bootstrapping 2000 new samples from the original sample
+```{r}
+set.seed(100)
+
+compute_sample_mean <- function(sample0) {
+  resample <- sample(sample0, length(sample0), replace=TRUE)
+  mean(resample)
+}
+
+boot <- replicate(n = 2000, compute_sample_mean(minday))
+```
+
+Precisely, the mean of minday and of the 2000 bootstrapped samples are:
+```{r}
+mean(minday)
+mean(boot)
+```
+
+### iii) Visualizing the means of the 2000 bootstrapped samples
+```{r, echo=FALSE, results="hide"}
+plot(density(minday), xlim = c(600, 1400), col = "blue", lty  = "dashed", main = "Bootstrapped means vs minday")
+abline(v=mean(boot), lwd=2) # adding the mean of the 2000 bootstrapped means to the plot
+abline(v=mean(minday), lty="dashed") # adding the mean of our original sample minday
+
+plot_resample_mean <- function(sample_i) {
+  abline(v=mean(sample_i), col=rgb(0.0, 0.4, 0.0, 0.01))
+}
+
+sapply(boot, FUN = plot_resample_mean)
+```
+
+We can see that the means of the bootstrapped samples and minday are very close. It is hard to notice any difference on the plot. So, we can change the x-axis limits in order to have a closer look:
+```{r, echo=FALSE, results="hide"}
+plot(density(minday), xlim = c(930, 950), col = "blue", lty  = "dashed", main = "Bootstrapped means vs minday (focus)")
+abline(v=mean(boot), lwd=2) # adding mean of the 2000 bootstrapped means to plot
+abline(v=mean(minday), lty="dashed") # adding mean of original sample minday
+
+sapply(boot, FUN = plot_resample_mean)
+
+```
+The difference in the sampled means is still quite small. However, we can see how the 2000 samples' means are located in relation to the original data's mean.
+
+### iv) Estimating the 95% CI for sampled means
+```{r}
+lower_m <- mean(boot) - 1.96 * sd(boot)/sqrt(length(boot))
+upper_m <- mean(boot) + 1.96 * sd(boot)/sqrt(length(boot))
+
+paste("The 95% CI of the bootstrapped means ranges from", round(lower_m, 2), "to", round(upper_m, 2))
+```
+## b) Estimate by what time of the day half of the clients already arrived to the restaurant
+
+### i) Calculate the median
+```{r}
+median(minday)
+```
+### ii) Visualize the medians of the 2000 bootstrapped values
+Firstly, we must do the bootstrapping:
+```{r}
+set.seed(100)
+
+compute_sample_median <- function(sample0) {
+  resample <- sample(sample0, length(sample0), replace=TRUE)
+  median(resample)
+}
+
+boot_m <- replicate(n = 2000,
+                        compute_sample_median(minday))
+```
+
+Now, we can visualize the bootstrapped medians:
+```{r, results="hide", tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+plot(density(minday), xlim = c(600, 1400), col = "blue", lty  = "dashed", main = "Bootstrapped medians vs minday")
+abline(v=median(boot_m), lwd=2) # adding median of the 2000 bootstrapped means to plot
+abline(v=median(minday), lty="dashed") # adding median of original sample minday
+
+plot_resample_median <- function(sample_i) {
+  abline(v=median(sample_i), col=rgb(0.0, 0.4, 0.0, 0.01))
+}
+
+sapply(boot_m, FUN = plot_resample_median)
+```
+
+We can see that the medians of the bootstrapped samples and minday are very close. Again, we can change the x-axis limits in order to see a little better:
+```{r, results="hide", tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+plot(density(minday), xlim = c(900, 1200), col = "blue", lty  = "dashed", main = "Bootstrapped medians vs minday (focus)")
+abline(v=median(boot_m), lwd=2) # adding the median of the 2000 bootstrapped means to the plot
+abline(v=median(minday), lty="dashed") # adding the median of our original sample minday
+
+sapply(boot_m, FUN = plot_resample_median)
+
+```
+We can see how the 2000 samples' medians are located in relation to the original data's mean.
+
+### iii) Estimating the 95% CI for sampled medians
+```{r}
+lower_med <- median(boot_m) - 1.96 * sd(boot_m)/(sqrt(length(boot_m)))
+upper_med <- median(boot_m) + 1.96 * sd(boot_m)/(sqrt(length(boot_m)))
+
+paste("The 95% CI of the bootstrapped medians ranges from", round(lower_med, 2), "to", round(upper_med, 2))
+```

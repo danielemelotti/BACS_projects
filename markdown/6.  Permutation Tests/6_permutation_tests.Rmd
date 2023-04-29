@@ -1,0 +1,205 @@
+---
+title: "HW (Week 6) - BACS - Permutation Tests"
+author: 'Author: 110077432'
+date: "3/25/2022"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+- \lhead{3/25/2022}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyr)
+```
+
+# Question 1
+
+## a) Picking a reshaping package
+
+I would choose to use tidyr package. There are a few reasons for doing that, starting from the fact that this package is still active and updated as of today, while reshape2 stopped receiving updates in 2017. Also, tidyr was specifically designed for tyding data, so it has quite a few functions that help us clean data in addition to reshaping it. For more information, please visit: https://jtr13.github.io/spring19/hx2259_qz2351.html
+
+## b) Code for reshaping verizon_wide.csv
+First, we need to import the data:
+```{r}
+verizon_wide <- read.csv("../../data/verizon_wide.csv")
+```
+
+Then we can perform the reshaping process:
+```{r}
+verizon_long <- gather(verizon_wide, na.rm = TRUE, key = "carrier", value = "response_time")
+```
+
+## c) Visualizing the head and tail of the long data
+```{r}
+head(verizon_long)
+```
+
+```{r}
+tail(verizon_long)
+```
+
+## d) Visualizing ILEC and CLEC response time
+At first, we can split the data based on groupings using split():
+```{r}
+carriers <- split(x = verizon_long$response_time, f = verizon_long$carrier)
+```
+
+Then, we can plot Verizon's response times:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), fig.height = 4, fig.width = 5, fig.align = "center"}
+plot(density(carriers$ILEC), xlim=c(-10, 200), col="cornflowerblue", lwd=2, main = "ILEC vs CLEC")
+lines(density(carriers$CLEC), col="coral3", lwd=2)
+legend(x = 145, y = 0.12, lty=1, c("ILEC", "CLEC"), col=c("coral3", "cornflowerblue"))
+```
+
+# Question 2
+
+## a) Stating null and alternative hypotheses
+Considering the instructions, the hypotheses would be:
+$$
+H_0: CLEC_t \le ILEC_t
+$$
+$$
+H_a: CLEC_t > ILEC_t
+$$
+
+## b) Testing the difference between the mean of ILEC versus CLEC response times at 1% significance
+
+### i) Assuming equal variances of the populations
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60)}
+t.test(x = carriers$CLEC, y = carriers$ILEC, alternative = "greater", conf.level = 0.99, var.equal = TRUE)
+```
+As the t-statistic doesn't belong to the interval [-2.58; 2.58], we can reject the null hypothesis. Moreover, the t-statistic is significant, as the p-value is lower than the significance level.
+
+### ii) Assuming not equal variances of the populations
+```{r}
+t.test(x = carriers$CLEC, y = carriers$ILEC, alternative = "greater", conf.level = 0.99)
+```
+As the t-statistic is included in the interval [-2.58; 2.58], we cannot reject the null hypothesis.
+
+## c) ILEC vs CLEC mean response times
+
+### i) Visualizing the distribution of permuted differences, and indicate the observed difference
+
+We can calculate the observed difference at first:
+```{r}
+# Removing NAs from the CLEC data:
+diff <- mean(verizon_wide$CLEC, na.rm = TRUE) - mean(verizon_wide$ILEC)
+diff
+```
+
+We can now plot our distribution:
+```{r dist, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), fig.height = 4, fig.width = 5, fig.align = "center"}
+time <- verizon_long$response_time
+carrier <- verizon_long$carrier
+
+set.seed(1000)
+
+permute_diff <- function(time, carrier) {
+  permuted <- sample(time, replace = FALSE)
+  grouped <- split(permuted, carrier)
+  permuted_diff <- mean(grouped$CLEC) - mean(grouped$ILEC)
+}
+
+nperms <- 10000
+
+permuted_diffs <- replicate(nperms, permute_diff(verizon_long$response_time, verizon_long$carrier))
+
+hist(permuted_diffs, breaks = "fd", probability = TRUE, xlab = "Permuted Differences", main = "Distribution of permuted differences")
+lines(density(permuted_diffs), lwd=2)
+abline(v = diff, col = "red", lwd = 2) # adding the observed differences to the plot
+```
+
+### ii) Calculating the one-tailed and two-tailed p-values of the permutation test
+
+The one-tailed p-value is:
+```{r}
+p_1tailed <- sum(permuted_diffs > diff) / nperms
+p_1tailed
+```
+
+The two-tailed p-value is:
+```{r}
+p_2tailed <- sum(abs(permuted_diffs) > diff) / nperms
+p_2tailed
+```
+
+### iii)  Would you reject the null hypothesis at 1% significance in a one-tailed test?
+As the p-value is greater than the significance level 0.01, we cannot reject the null hypothesis.
+
+# Question 3
+
+## a) Computing the W statistic using the vectorized form
+```{r}
+gt_eq <- function(a, b) { 
+ifelse(a > b, 1, 0) + ifelse(a == b, 0.5, 0) 
+}
+
+W <- sum(outer(verizon_wide$CLEC, verizon_wide$ILEC, FUN = gt_eq), na.rm = TRUE)
+W
+```
+
+## b) Computing one-tailed p-value for W
+```{r}
+n1 <- length(carriers$CLEC)
+n2 <- length(carriers$ILEC)
+
+wilcox_p_1tail <- 1 - pwilcox(W, n1, n2)
+wilcox_p_1tail
+```
+
+## c) Running Wilcoxon test using wilcox.test()
+```{r}
+wilcox.test(carriers$CLEC, carriers$ILEC, alternative = "greater", conf.level = 0.99) # one-tailed
+```
+As we can see, the W statistic is the same as in part b).
+
+## d) At 1% significance, and one-tailed, would you reject the null hypothesis that the values of CLEC and ILEC are similar?
+If our null hypothesis states that CLEC and ILEC's values are similar, I imagine that the alternative hypothesis would say that they are different, meaning that we are dealing with a two-tailed test. In that case, the test should look like:
+```{r}
+wilcox.test(carriers$CLEC, carriers$ILEC, alternative = "two.sided", conf.level = 0.99) # two-tailed
+```
+We can reject the null hypothesis, as the p-value is much lower than the halved alpha (0.005). If we were dealing with a one-tailed test, like in Question 3 part c) (and the rest of the homework), we would still be rejecting the null hypothesis, as the p-value is smaller than the significance level.
+
+# Question 4
+
+## a) Creating a function to see how a distribution of values compares to a perfectly normal distribution
+```{r}
+norm_qq_plot <- function(values) { 
+  probs1000 <- seq(0, 1, 0.001)
+  q_vals <- quantile(x = values ,probs = probs1000)
+  q_norm <- qnorm(p = probs1000, mean = mean(values), sd = sd(values))
+  plot(q_norm, q_vals, xlab="normal quantiles", ylab="values quantiles")
+  abline(a = 0, b = 1 , col="red", lwd=2)
+}
+```
+
+## b) Confirming that norm_qq_plot() works
+First, let's recreate the d123 distribution:
+```{r}
+set.seed(978234)
+d1 <- rnorm(n=500, mean=15, sd=5)
+d2 <- rnorm(n=200, mean=30, sd=5)
+d3 <- rnorm(n=100, mean=45, sd=5)
+d123 <- c(d1, d2, d3)
+```
+
+Now, let's plot our qq-plot:
+```{r pl, fig.height = 4, fig.width = 5, fig.align = "center"}
+plot(density(d123), main = "Distribution d123")
+norm_qq_plot(d123)
+```
+The qq-plot is suggesting that the data is not normally distributed. Indeed, the data points don't follow the red line very well. Also, there seems to be a phenomenon of thin tails.
+
+## c) Are the values from CLEC and ILEC samples normally distributed?
+```{r plts, fig.height = 3, fig.width = 6.5, fig.align = "center"}
+par(mfrow = c(1, 2))
+norm_qq_plot(carriers$CLEC)
+norm_qq_plot(carriers$ILEC)
+```
+As we can see, the data points of CLEC (on the left side) and ILEC (on the right side) don't follow the red line almost at all, signifying a strong non-normality of such data.

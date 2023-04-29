@@ -1,0 +1,88 @@
+---
+title: "HW (Week 1) - BACS - Computation and Statistics"
+author: 'Author: 110077432'
+date: "2/19/2022"
+output:
+  pdf_document: default
+  word_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+---
+
+```{r}
+# Importing the data:
+ages <- read.table("../../data/customers.txt", header = TRUE, colClasses = "numeric")
+ages <- ages$age
+```
+
+```{r}
+# 1. The 5th element of the original list is:
+ages[5]
+```
+
+```{r}
+# 2. The fifth lowest age is:
+sorted_unique <- sort(unique(ages)) # sorting unique ages
+sorted_unique[5]
+```
+
+```{r}
+# 3. The five lowest ages are:
+sorted_unique[1:5] # a shorter way of showing the five lowest ages
+```
+
+```{r}
+# 4. The five highest ages are:
+sort_dec <- sort(sorted_unique, decreasing = TRUE) # sorting ages in a descending order
+sort_dec[1:5] 
+```
+
+```{r}
+# 5. The mean age is:
+mean(ages)
+```
+
+```{r}
+# 6. The standard deviation using sd() is:
+sd(ages)
+```
+
+```{r}
+# 7. The difference between each age and the mean age is contained in age_diff:
+age_diff <- ages - mean(ages)
+```
+
+```{r}
+# 8. The average of age_diff:
+mean(age_diff)
+```
+Perhaps, it could be that we are interested in finding the mean error, which is done just as in point 7 and 8 above. However, the mean error is not usually helpful, because positives and negatives cancel each other out. Therefore, we could be more interested in calculating something similar to the MAE (Mean Absolute Error). In that case, we shall calculate the absolute values of the differences, then calculate the mean. In our case, the difference is that we would be using actual observations and their mean instead of actual observations and predicted ones.
+
+```{r}
+# If we wanted to calculate the "pseudo-MAE":
+mean(abs(ages - mean(ages)))
+```
+
+```{r ages_hist, fig.height = 3, fig.width = 5, fig.align = "center"}
+# 9. Visualizing a histogram of ages:
+hist(ages)
+```
+
+
+```{r ages_density, fig.height = 3, fig.width = 5, fig.align = "center"}
+# Visualizing a density plot of ages:
+plot(density(ages))
+```
+
+
+```{r ages_box, fig.height = 6, fig.width = 8, fig.align = "center"}
+# Visualizing a boxplot + stripchart of ages:
+boxplot(ages, horizontal = TRUE)
+stripchart(ages, method = "stack", add = TRUE)
+title("Boxplot + Stripchart")
+```
+
