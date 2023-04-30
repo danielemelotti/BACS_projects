@@ -1,0 +1,247 @@
+---
+title: "HW (Week 12) - BACS - Moderation and Mediation"
+author: 'Author: 110077432'
+date: "5/6/2022"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+- \lhead{5/6/2022}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(ggplot2)
+require(dplyr)
+```
+
+First of all, let's load and arrange the dataset for this assignment:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+auto <- read.table("../../data/auto-data.txt", header=FALSE, na.strings = "?")
+
+names(auto) <- c("mpg", "cylinders", "displacement", "horsepower", "weight",
+"acceleration", "model_year", "origin", "car_name")
+```
+
+We may now create cars_log with log-transformed columns for mpg, weight and acceleration, which we will use in Question 1 and 2 of this assignment:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+cars_log <- with(auto, data.frame(log(mpg), log(weight), log(acceleration), model_year, origin))
+```
+
+And cars_log_3, that would be the data set including also log.cylinders., which we use in Question 3:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+cars_log_3 <- with(auto, data.frame(log(mpg), log(weight), log(acceleration), model_year, origin, log(cylinders)))
+```
+
+# Question 1
+
+## a) Visualizing how weight might moderate the relationship between acceleration and mpg
+
+### i) Creating two subsets of the data, one for light-weight cars and one for heavy cars
+
+We first compute the mean as the log of the mean of weight, then subset the data:
+```{r}
+mean_weight <- log(mean(auto$weight))
+
+light_weight <- subset(x = cars_log, log.weight. < mean_weight)
+heavy_weight <- subset(x = cars_log, log.weight. > mean_weight)
+```
+
+### ii) Creating a single scatterplot of acceleration vs mpg
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 70), warning = FALSE}
+classified_data <- cars_log %>%
+  mutate(weight_class = ifelse(log.weight. < mean_weight, "light_weight", "heavy_weight"))
+
+plt_1 <- ggplot(data = classified_data, aes(x = log.acceleration., y = log.mpg., col = weight_class)) +
+  geom_point() +
+  theme_classic()
+
+ggsave(filename = "plot_1.png", width = 6, height = 3, plt_1)
+```
+
+```{r plot_1, echo=FALSE, fig.cap="Acceleration vs mpg of light vs heavy cars", out.width = '60%', out.height = '40%', fig.align='center'}
+knitr::include_graphics("plot_1.png")
+```
+
+### iii) Drawing two slopes of acceleration vs mpg on the scatterplot
+
+```{r}
+plt_2 <- plt_1 +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic()
+
+ggsave(filename = "plot_2.png", width = 6, height = 3, plt_2)
+```
+
+```{r plot_2, echo=FALSE, fig.cap="Acceleration vs mpg of light vs heavy cars with regression lines", out.width = '60%', out.height = '40%', fig.align='center'}
+knitr::include_graphics("plot_2.png")
+```
+
+## b) Reporting full summaries of 2 separate regressions for light and heavy cars
+
+The first regression relates to light-weight cars:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+light_reg <- lm(log.mpg. ~ log.weight. + log.acceleration. + model_year + factor(origin), data = light_weight)
+summary(light_reg)
+```
+
+The second regression relates to heavy-weight cars:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+heavy_reg <- lm(log.mpg. ~ log.weight. + log.acceleration. + model_year + factor(origin), data = heavy_weight)
+summary(heavy_reg)
+```
+
+## c) What do you observe about light vs heavy cars so far?
+
+We can see from the regression outputs that a 1% increase in acceleration time for light cars leads to a 10.96% increase in mileage per gallon, while this increase is only 4.01% for heavy cars. Therefore, we notice that the weight is quite an influential factor in determining mpg. Interestingly, weight has a similar influence on mpg within the two separate groups.
+
+# Question 2
+
+## a) Between weight and acceleration ability (in seconds), which variable might be a moderating versus independent variable in affecting mileage?
+
+I think that weight could be the independent variable while acceleration is a moderator in this case. Generally, heavier cars will consume more fuel no matter what, while the acceleration feature is different. When we look at the scatter plot from a) iii), we see that cars which have similar acceleration time might have way different mpg values, and that is mostly due to the weight factor. 
+
+## b) Using various regression models to model the possible moderation on log.mpg.
+
+### i) Reporting a regression with no interaction terms
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+no_interaction_reg <- lm(log.mpg. ~ log.weight. + log.acceleration. + model_year + factor(origin), data = cars_log)
+summary(no_interaction_reg)
+```
+
+### ii) Reporting a regression with an interaction between weight and acceleration
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+weight_by_accel_reg <- lm(log.mpg. ~ log.weight. + log.acceleration. + log.weight. * log.acceleration. + model_year + factor(origin), data = cars_log)
+summary(weight_by_accel_reg)
+```
+
+### iii) Reporting a regression with a mean-centered interaction term
+
+First of all, we mean-center the interaction term:
+```{r}
+log.weight.mc <- scale(cars_log$log.weight., center = TRUE, scale = FALSE)
+log.acceleration.mc <- scale(cars_log$log.acceleration., center = TRUE, scale = FALSE)
+```
+
+Then, we can run the regression:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+weight_by_accel_mc_reg <- lm(log.mpg. ~ log.weight.mc + log.acceleration.mc + log.weight.mc * log.acceleration.mc + model_year + factor(origin), data = cars_log)
+summary(weight_by_accel_mc_reg)
+```
+
+### iv) Reporting a regression with an orthogonalized interaction term
+
+Let's extract the residuals from the interaction regression:
+```{r}
+interaction_term <- cars_log$log.weight. * cars_log$log.acceleration.
+interaction_reg <- lm(interaction_term ~ cars_log$log.weight. + cars_log$log.acceleration.)
+interaction_ortho <- interaction_reg$residuals
+```
+
+And then, let's rerun the regression including those residuals:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+ortho_reg <- lm(log.mpg. ~ log.weight. + log.acceleration. + interaction_ortho + model_year + factor(origin), data = cars_log)
+summary(ortho_reg)
+```
+
+## c) For each of the interaction term strategies above what is the correlation between that interaction term and the two variables that you multiplied together?
+
+We first explore the correlations within the raw interaction term, log.weight. and log.acceleration.:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+raw_cor <- round(cor(cbind(cars_log[, 2:3], raw_inter = cars_log$log.weight. * cars_log$log.acceleration.)), 2)
+
+knitr::kable(raw_cor, caption = "Correlation between raw interaction term, log.weight. 
+             and log.acceleration.")
+```
+As we can see, the interaction term has a strong positive correlation with the log.acceleration. variable, while it has a quite weak positive correlation with log.weight.
+
+Now, we explore the correlations within the mean-centered interaction term, log.weight.mc and log.acceleration.mc:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+mc <- as.data.frame(cbind(log.weight.mc, log.acceleration.mc, mc_inter = log.weight.mc * log.acceleration.mc))
+names(mc) <- c("log.weight.mc", "log.acceleration.mc", "mc_inter")
+
+mc_cor <- round(cor(mc), 2)
+
+knitr::kable(mc_cor, caption = "Correlation between mean-centered interaction term, 
+             log.weight.mc and log.acceleration.mc")
+```
+
+We can see that the correlations of the mean-centered interaction term with the single variables are rather weak.
+
+Finally, we examine the correlations within the orthogonalized interaction term, log.weight. and log.acceleration:
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+raw_cor <- round(cor(cbind(cars_log[, 2:3], ortho_inter = interaction_ortho)), 2)
+
+knitr::kable(raw_cor, caption = "Correlation between orthogonalized interaction term, 
+             log.weight. and log.acceleration.")
+```
+
+We see that the orthogonalized interaction term has no correlation at all with the single variables.
+
+# Question 3
+
+## a) Computing the direct effects
+
+### i) Model 1
+```{r}
+mod1 <- lm(log.weight. ~ log.cylinders., data = cars_log_3)
+summary(mod1)
+```
+
+As we see from the summary of the regression, the number of cylinders seems to have a significant direct effect on weight.
+
+### ii) Model 2
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60), warning = FALSE}
+mod2 <- lm(log.mpg. ~ log.weight. + log.acceleration. + model_year + factor(origin), data = cars_log_3)
+summary(mod2)
+```
+
+We see that weight has a significant direct effect on mpg, even if we control for other variables.
+
+## b) What is the indirect effect of cylinders on mpg?
+
+```{r}
+mod1$coefficients[2] * mod2$coefficients[2]
+```
+As we see above, the indirect effect of cylinders on mpg is -0.7189.
+
+## c) Bootstrapping the CI of the indirect effect of cylinders on mpg
+
+### i) Bootstrapping Model 1 and 2. What is the 95% CI of the indirect effect of log.cylinders. on log.mpg.?
+```{r}
+boot_mediation <- function(model1, model2, dataset) {
+boot_index <- sample(1:nrow(dataset), replace = TRUE)
+data_boot <- dataset[boot_index, ]
+regr1 <- lm(model1, data_boot)
+regr2 <- lm(model2, data_boot)
+return(regr1$coefficients[2] * regr2$coefficients[2])
+}
+
+set.seed(20220505)
+indirect <- replicate(2000, boot_mediation(mod1,mod2,cars_log_3))
+q <- quantile(indirect, probs=c(0.025, 0.975))
+
+knitr::kable(q, caption = "Bootstrapped CI of the Indirect Effect")
+```
+
+
+### ii) Plotting density of the distribution of the 95% CI of the indirect effect
+
+```{r}
+plt_3 <- ggplot(data = data.frame(indirect), aes(x = indirect)) +
+  geom_density(col = "cornflowerblue") +
+  geom_vline(aes(xintercept = q[1]), col = "tomato4", lty = "dotted") +
+  geom_vline(aes(xintercept = q[2]), col = "tomato4", lty = "dotted") +
+  theme_classic()
+
+ggsave(filename = "plot_3.png", width = 6, height = 3, plt_3)
+```
+
+```{r plot_3, echo=FALSE, out.width = '60%', out.height = '40%', fig.align='center'}
+knitr::include_graphics("plot_3.png")
+```
+

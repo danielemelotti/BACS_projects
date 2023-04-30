@@ -1,0 +1,155 @@
+---
+title: "HW (Week 13) - BACS - Composites and Components"
+author: 'Author: Daniele - 110077432'
+date: "5/15/2022"
+output:
+  pdf_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{110077432}
+- \fancyfoot[CO,CE]{  }
+- \fancyfoot[LE,RO]{\thepage}
+- \lhead{5/15/2022}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(readxl)
+require(devtools)
+require(cli)
+```
+
+First things first, we recreate the cars_log dataset:
+```{r}
+cars <- read.table("../../data/auto-data.txt", header=FALSE, na.strings = "?")
+
+names(cars) <- c("mpg", "cylinders", "displacement", "horsepower", "weight",
+"acceleration", "model_year", "origin", "car_name")
+cars <- na.omit(cars)
+
+cars_log <- with(cars, data.frame(log(mpg), log(cylinders), log(displacement),
+log(horsepower), log(weight), log(acceleration), model_year, origin))
+```
+
+# Question 1
+
+## a) Analyzing the principal components of the 4 collinear variables
+
+### i) Creating a new dataframe of the 4 log-transformed variables with high multicollinearity
+```{r}
+multi_col <- with(cars_log, data.frame(log.cylinders., log.displacement.,
+log.horsepower., log.weight.))
+multi_col <- na.omit(multi_col)
+
+head(multi_col)
+```
+
+### ii) How much variance of the four variables is explained by their first principal component?
+
+We need to prepare the covariance matrix, then calculate the eigenvectors, and retrieve the eigenvalues:
+```{r}
+multi_col_eigen <- eigen(cor(multi_col))
+
+round(multi_col_eigen$values[1]/sum(multi_col_eigen$values), 4)
+```
+
+The amount of variance explained by the first principal component of the four considered variables is 0.9186.
+
+### iii) What would you call the information captured by the first principal component's eigenvector?
+```{r}
+PC1_eigenvector <- data.frame(multi_col_eigen$vectors[, 1])
+colnames(PC1_eigenvector) <- "Eigenvector"
+knitr::kable(PC1_eigenvector, caption = "Eigenvector of the 1st principal component")
+```
+The first principal component captures the most orthogonal variance. As we are dealing with 4 variables that all uniquely describe the performance of the car engines, I'd call such information "engine performance".
+
+## b) Revisiting the regression analysis on cars_log
+
+### i) Storing the scores of the first principal component as a new column of cars_log
+
+We aid ourselves with prcomp(), so as to get the scores:
+```{r}
+pca_prcomp <- prcomp(multi_col, scale. = TRUE)
+
+cars_log$PC1_scores <- pca_prcomp$x[,1]
+```
+
+### ii) Regressing mpg over PC1_scores, acceleration, model_year and origin
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60)}
+reg <- lm(log.mpg. ~ PC1_scores + log.acceleration. + model_year + factor(origin), data = cars_log)
+summary(reg)
+```
+
+### iii) Running the regression with standadized variables
+```{r, tidy=TRUE, tidy.opts = list(blank = FALSE, width.cutoff = 60)}
+cars_log_std <- data.frame(scale(cars_log))
+
+reg_std <- lm(log.mpg. ~ PC1_scores + log.acceleration. + model_year + factor(origin), data = cars_log_std)
+summary(reg_std)
+```
+
+The new column, containing the PC1 scores, is statistically significant in both specifications; however, its coefficient is quite higher in the latest specification, therefore it acquires a greater importance.
+
+# Question 2
+
+Let's upload the excel file data directly, by using read_excel() from the readxl package:
+```{r}
+questions <- read_excel("../../data/security_questions.xlsx", sheet = 1)
+data <- read_excel("../../data/security_questions.xlsx", sheet = 2)
+```
+
+## a) How much variance did each extracted factor explain?
+```{r}
+quest_pca <- prcomp(data, scale. = TRUE)
+summary(quest_pca)
+```
+The explained explained can be found in the Proportion of Variance row in the data above.
+
+## b) How many dimensions would you retain?
+
+If we look for the criteria of eigenvalue > 1, then:
+```{r}
+quest_eigen <- eigen(cor(data))
+quest_PC <- quest_eigen$values
+quest_PC
+```
+
+I would retain the first 3 dimensions. However, by using a screeplot:
+```{r}
+screeplot(quest_pca, type = "lines", main = "Screeplot of security questions' PCA")
+abline(h=1, col = "red", lwd = 1.5)
+```
+
+According to the screeplot with threshold above, we are able to retain the first 3 dimensions. However, following the approach seen in class, we could also retain the very first dimension only.
+
+## c) Can you interpret what any of the principal components means?
+
+Let's look at the PC vs variable matrix:
+```{r}
+quest_pca$rotation
+```
+
+PC1 is hardly interpretable in my opinion, as the values are all very similar. As for PC2, it looks like it can explain well questions 4,12 and 17. PC3 is quite good at explaining questions 5 and 10.
+
+# Question 3
+
+Let's download the compstatslib package:
+```{r}
+# devtools::install_github("soumyaray/compstatslib")
+# require(compstatslib)
+```
+
+## a) Creating an oval shaped scatter plot that stretches in two directions
+
+Here's the oval scatterplot:
+```{r plot_2, echo=FALSE, fig.cap="Principal components of an oval scatterplot", out.width = '60%', out.height = '60%', fig.height = 4, fig.width = 7, fig.align='center'}
+knitr::include_graphics("plot2.png")
+```
+
+## b) Creating a scatterplot whose principal component vectors do not seem to match the major direction of variance
+
+Here's the plot:
+```{r plot_3, echo=FALSE, fig.cap="Counter-intuitive principal components scenario", out.width = '60%', out.height = '60%', fig.height = 4, fig.width = 7, fig.align='center'}
+knitr::include_graphics("plot3.png")
+```
